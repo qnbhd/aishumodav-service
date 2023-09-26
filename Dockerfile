@@ -2,6 +2,8 @@ FROM python:3.10
 
 WORKDIR /app
 
+RUN apt update && apt install -y ffmpeg
+
 ENV PYTHONUNBUFFERED=1
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
