@@ -1,21 +1,27 @@
 import base64
 import io
 import json
-from fastapi import APIRouter, UploadFile
+
+import librosa
+from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import StreamingResponse
 from pydub import AudioSegment
-import librosa
+
+from service.recognition.model import RecognitionModel
+from service.recognition.vosk_model import VoskModel
 
 router = APIRouter(prefix="/api/v1")
 
 
 @router.post("/recognize")
-async def recognize(audio: UploadFile):
+async def recognize(
+    audio: UploadFile,
+    model: RecognitionModel = Depends(lambda: VoskModel()),
+):
     # Convert the uploaded audio to WAV format
     audio_data = await audio.read()
     audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
     wav_data = audio_segment.export(format="wav").read()
-
     # Process the WAV data using librosa
     y, sr = librosa.load(io.BytesIO(wav_data), sr=None)
 
@@ -25,7 +31,7 @@ async def recognize(audio: UploadFile):
     # Create a dictionary with the desired response data
     response_data = {
         "length": duration,
-        "additional_info": "This is additional information you want to include."
+        "additional_info": model.recognize(io.BytesIO(wav_data)),
     }
 
     # Serialize the dictionary to JSON
@@ -35,14 +41,17 @@ async def recognize(audio: UploadFile):
     def generate_response():
         # Yield the JSON data
         yield response_json.encode("utf-8")
-        yield '\n--boundary\n'
+        yield "\n--boundary\n"
         # Yield the audio data
-        yield base64.b64encode(wav_data).decode('utf-8')
+        yield base64.b64encode(wav_data).decode("utf-8")
 
     response_headers = {
         "Content-Disposition": "attachment; filename=original_audio.wav",
-        "Content-Type": "multipart/mixed; boundary=boundary"
+        "Content-Type": "multipart/mixed; boundary=boundary",
     }
 
-    return StreamingResponse(generate_response(), media_type="multipart/mixed; boundary=boundary",
-                             headers=response_headers)
+    return StreamingResponse(
+        generate_response(),
+        media_type="multipart/mixed; boundary=boundary",
+        headers=response_headers,
+    )
