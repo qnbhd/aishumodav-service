@@ -1,14 +1,18 @@
 import base64
 import io
 import json
+import tempfile
 
 import librosa
 from fastapi import APIRouter, Depends, UploadFile
 from fastapi.responses import StreamingResponse
 from pydub import AudioSegment
+from df.enhance import load_audio, save_audio
 
 from service.recognition.model import RecognitionModel
 from service.recognition.vosk_model import VoskModel
+from service.recognition.noise_reduction_model import NoiseReductionModel
+from service.recognition.transcription_model import TranscriptionModel
 
 router = APIRouter(prefix="/api/v1")
 
@@ -17,6 +21,8 @@ router = APIRouter(prefix="/api/v1")
 async def recognize(
     audio: UploadFile,
     model: RecognitionModel = Depends(lambda: VoskModel()),
+    denoise_model: RecognitionModel = Depends(lambda: NoiseReductionModel()),
+    transcription_model: RecognitionModel = Depends(lambda: TranscriptionModel()),
 ):
     # Convert the uploaded audio to WAV format
     audio_data = await audio.read()
@@ -28,10 +34,23 @@ async def recognize(
     # Calculate the duration of the audio
     duration = librosa.get_duration(y=y, sr=sr)
 
+    # Create a torch.Tensor from the audio data
+    audio_tensor = load_audio(io.BytesIO(wav_data), sr=sr)
+
+    # Noise reduction
+    audio_tensor = denoise_model.recognize(audio_tensor)
+    # Save the audio to temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.waw') as tmp_file:
+        cleaned_audio_path = tmp_file.name
+        save_audio(audio_tensor, cleaned_audio_path, sr=sr)
+
+    # Transcription audio
+    transcription = transcription_model.recognize(cleaned_audio_path)
+
     # Create a dictionary with the desired response data
     response_data = {
         "length": duration,
-        "additional_info": model.recognize(io.BytesIO(wav_data)),
+        "additional_info": transcription
     }
 
     # Serialize the dictionary to JSON
