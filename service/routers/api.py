@@ -1,6 +1,7 @@
 import base64
 import io
 import json
+from typing import Any, Dict
 
 import librosa
 from fastapi import APIRouter, Depends, UploadFile
@@ -8,19 +9,26 @@ from fastapi.responses import StreamingResponse
 from pydub import AudioSegment
 
 from service.recognition.model import RecognitionModel
-from service.recognition.vosk_model import VoskModel
+from service.recognition.normalization import normalize
+from service.recognition import create_model
+from service.config import get_config
 
 router = APIRouter(prefix="/api/v1")
+
+
+async def get_model(config: Dict[str, Any] = Depends(get_config)):
+    return create_model(config["recognition"]["kind"], **config["recognition"])
 
 
 @router.post("/recognize")
 async def recognize(
     audio: UploadFile,
-    model: RecognitionModel = Depends(lambda: VoskModel()),
+    model: RecognitionModel = Depends(get_model),
 ):
     # Convert the uploaded audio to WAV format
     audio_data = await audio.read()
     audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
+    audio_segment = normalize(audio_segment)
     wav_data = audio_segment.export(format="wav").read()
     # Process the WAV data using librosa
     y, sr = librosa.load(io.BytesIO(wav_data), sr=None)
