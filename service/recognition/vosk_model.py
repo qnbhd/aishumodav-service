@@ -1,3 +1,4 @@
+from __future__ import annotations
 import io
 import json
 import wave
@@ -8,8 +9,8 @@ from .model import RecognitionModel
 
 
 class VoskModel(RecognitionModel):
-    def __init__(self, model: Model = Model(lang="ru"), buff_size: int = 4000):
-        self.vosk_model = model
+    def __init__(self, *args, model: Model | str = Model(lang="ru"), buff_size: int = 4000, **kwargs):
+        self.vosk_model = model if isinstance(model, Model) else Model(lang=model)
         self.buff_size = buff_size
 
     def recognize(self, audio: io.BytesIO) -> str:
