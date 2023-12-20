@@ -11,34 +11,52 @@ from pydub import AudioSegment
 from service.recognition.model import RecognitionModel
 from service.recognition.normalization import normalize
 from service.recognition import create_model
+from service.denoise import create_denoiser
+from service.denoise.model import DenoiseModel
 from service.config import get_config
 
 router = APIRouter(prefix="/api/v1")
 
 
-async def get_model(config: Dict[str, Any] = Depends(get_config)):
+async def get_model(config: Dict[str, Any] = Depends(get_config)) -> RecognitionModel:
     return create_model(config["recognition"]["kind"], **config["recognition"])
+
+
+async def get_denoiser(config: Dict[str, Any] = Depends(get_config)) -> DenoiseModel:
+    return create_denoiser(config["denoise"]["kind"], **config["denoise"])
 
 
 @router.post("/recognize")
 async def recognize(
     audio: UploadFile,
     model: RecognitionModel = Depends(get_model),
+    denoiser: DenoiseModel = Depends(get_denoiser),
 ):
-    # Convert the uploaded audio to WAV format
+    # Load data
     audio_data = await audio.read()
-    audio_segment = AudioSegment.from_file(io.BytesIO(audio_data))
+
+    # get bytes
+    audio_bytes = io.BytesIO(audio_data)
+
+    # normalize
+    audio_segment = AudioSegment.from_file(audio_bytes)
     audio_segment = normalize(audio_segment)
+
+    # convert to wav
     wav_data = audio_segment.export(format="wav").read()
+
+    # denoise
+    wav_data = denoiser.denoise(wav_data)
+
     # Process the WAV data using librosa
     y, sr = librosa.load(io.BytesIO(wav_data), sr=None)
-
     # Calculate the duration of the audio
     duration = librosa.get_duration(y=y, sr=sr)
 
     # Create a dictionary with the desired response data
     response_data = {
         "length": duration,
+        # transcribe
         "additional_info": model.recognize(io.BytesIO(wav_data)),
     }
 

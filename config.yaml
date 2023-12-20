@@ -3,5 +3,5 @@ recognition:
   model: ru
   buff_size: 4000
 
-#denoising:
-#  foo: bar
+denoise:
+  kind: nr
