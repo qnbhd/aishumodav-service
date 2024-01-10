@@ -1,0 +1,7 @@
+recognition:
+  kind: vosk
+  model: ru
+  buff_size: 4000
+
+denoise:
+  kind: nr
