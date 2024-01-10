@@ -43,22 +43,28 @@ async def recognize(
     audio_segment = normalize(audio_segment)
 
     # convert to wav
-    wav_data = audio_segment.export(format="wav").read()
+    wav_data = audio_segment.export(format="wav")
 
     # denoise
     wav_data = denoiser.denoise(wav_data)
 
+    wav_data.seek(0)
+
     # Process the WAV data using librosa
-    y, sr = librosa.load(io.BytesIO(wav_data), sr=None)
+    y, sr = librosa.load(io.BytesIO(wav_data.read()), sr=None)
     # Calculate the duration of the audio
     duration = librosa.get_duration(y=y, sr=sr)
+
+    wav_data.seek(0)
 
     # Create a dictionary with the desired response data
     response_data = {
         "length": duration,
         # transcribe
-        "additional_info": model.recognize(io.BytesIO(wav_data)),
+        "additional_info": model.recognize(io.BytesIO(wav_data.read())),
     }
+
+    wav_data.seek(0)
 
     # Serialize the dictionary to JSON
     response_json = json.dumps(response_data)
@@ -69,7 +75,7 @@ async def recognize(
         yield response_json.encode("utf-8")
         yield "\n--boundary\n"
         # Yield the audio data
-        yield base64.b64encode(wav_data).decode("utf-8")
+        yield base64.b64encode(wav_data.read()).decode("utf-8")
 
     response_headers = {
         "Content-Disposition": "attachment; filename=original_audio.wav",
