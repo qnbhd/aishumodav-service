@@ -6,7 +6,9 @@ RUN apt update && apt install -y ffmpeg
 
 ENV PYTHONUNBUFFERED=1
 COPY requirements.txt requirements.txt
+COPY requirements-torch.txt requirements-torch.txt
 RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements-torch.txt
 COPY service service
 COPY config.yaml config.yaml
 
